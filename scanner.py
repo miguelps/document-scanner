@@ -8,6 +8,8 @@ import os
 import cv2
 import numpy as np
 
+from line import Line, Point
+
 MAX_LENGTH = 1200  # 图片的长边 resize 到 MAX_LENGTH
 
 CANNY_THRESH_MIN = 10  # 小于这个阈值的像素不会被认为是边缘
@@ -20,6 +22,9 @@ HOUGH_THRESH = 200
 HOUGH_MIN_LINE_LENGTH = 20
 HOUGH_MAX_LINE_GAP = 50
 LINE_LENGTH_THRESH = 150  # 过滤霍夫直线检测的结果
+
+INTERSECTION_ANGLE_MIN = 45
+INTERSECTION_ANGLE_MAX = 135
 
 
 def main(args):
@@ -83,7 +88,6 @@ def main(args):
 
     # 获得直线段的延长线
     extended_lines = []
-
     extended_lines_img = image.copy()
     for line in filterd_lines:
         x1, y1, x2, y2 = line
@@ -122,10 +126,19 @@ def main(args):
             extend_x1, extend_y1, extend_x2, extend_y2 = int(extend_x1), int(extend_y1), int(extend_x2), int(extend_y2)
 
         cv2.line(extended_lines_img, (extend_x1, extend_y1), (extend_x2, extend_y2), (0, 255, 0), 1)
-        extended_lines.append((extend_x1, extend_y1, extend_x2, extend_y2))
+        extended_lines.append(Line(Point(extend_x1, extend_y1), Point(extend_x2, extend_y2)))
+
+    # 合并斜率相近，并且烤的很近的直线
+
+    for i in range(len(extended_lines)):
+        line = extended_lines[i]
+        for j in range(i + 1, len(extended_lines)):
+            _line = extended_lines[j]
+            point = line.cross(_line)
+            if point:
+                cv2.circle(extended_lines_img, (point.x, point.y), 2, color=(0, 0, 200))
 
     watch(extended_lines_img, "Extended Lines")
-
 
 
 
