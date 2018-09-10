@@ -8,7 +8,7 @@ import os
 import cv2
 import numpy as np
 
-from line import Line, Point
+from helper import Line
 
 MAX_LENGTH = 1200  # 图片的长边 resize 到 MAX_LENGTH
 
@@ -27,7 +27,10 @@ INTERSECTION_ANGLE_MIN = 45
 INTERSECTION_ANGLE_MAX = 135
 
 # 合并靠的比较近的直线，用的阈值
-MERGE_LINE_MAX_DISTANCE = 20
+MERGE_LINE_MAX_DISTANCE = 50
+
+# 文档对象占图片尺寸的最小比例
+MIN_DOC_RADIO = 0.4
 
 
 def main(args):
@@ -131,7 +134,10 @@ def main(args):
             extend_x1, extend_y1, extend_x2, extend_y2 = int(extend_x1), int(extend_y1), int(extend_x2), int(extend_y2)
 
         cv2.line(extended_lines_img, (extend_x1, extend_y1), (extend_x2, extend_y2), (0, 255, 0), 1)
-        extended_lines.append(Line(Point(extend_x1, extend_y1), Point(extend_x2, extend_y2)))
+
+        p0 = np.array([extend_x1, extend_y1])
+        p1 = np.array([extend_x2, extend_y2])
+        extended_lines.append(Line(p0, p1))
     watch(extended_lines_img, "Extended Lines")
 
     # 合并斜率相近，并且靠的很近的直线
@@ -155,23 +161,24 @@ def main(args):
         merged_extended_lines.append(line)
 
     for line in merged_extended_lines:
-        cv2.line(merged_lines_img, (line.p0.x, line.p0.y), (line.p1.x, line.p1.y), color=(0, 255, 0))
+        cv2.line(merged_lines_img, line.int_p0, line.int_p1, color=(0, 255, 0))
 
     print("Lines num after merge: %d" % len(merged_extended_lines))
     watch(merged_lines_img, "Merged Lines")
 
     # 获得线段的延长线交点
+    cross_pnts = []
     for i in range(len(merged_extended_lines)):
         line = merged_extended_lines[i]
         for j in range(i + 1, len(merged_extended_lines)):
             _line = merged_extended_lines[j]
             point = line.cross(_line)
-            if point:
-                cv2.circle(merged_lines_img, (point.x, point.y), 5, color=(0, 0, 255), thickness=2)
+            if point is not None:
+                cross_pnts.append((point, [line, _line]))
+                cv2.circle(merged_lines_img, (int(point[0]), int(point[1])), 5, color=(0, 0, 255), thickness=2)
     watch(merged_lines_img, "Extended Lines cross point")
 
-
-
+    # 每次取四个点
 
 
     # 做投影变换，摆正视图，目标视图的比例应该和文档的比例相关
