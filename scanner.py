@@ -2,13 +2,14 @@
 参考： http://fengjian0106.github.io/2017/05/08/Document-Scanning-With-TensorFlow-And-OpenCV/
 """
 
+from itertools import combinations
 import argparse
 import os
 
 import cv2
 import numpy as np
 
-from helper import Line
+from helper import Line, clockwise_points, draw_four_vectors, distance
 
 MAX_LENGTH = 1200  # 图片的长边 resize 到 MAX_LENGTH
 
@@ -23,14 +24,21 @@ HOUGH_MIN_LINE_LENGTH = 20
 HOUGH_MAX_LINE_GAP = 50
 LINE_LENGTH_THRESH = 150  # 过滤霍夫直线检测的结果
 
-INTERSECTION_ANGLE_MIN = 45
-INTERSECTION_ANGLE_MAX = 135
-
 # 合并靠的比较近的直线，用的阈值
 MERGE_LINE_MAX_DISTANCE = 50
 
-# 文档对象占图片尺寸的最小比例
-MIN_DOC_RADIO = 0.4
+# 两个交点如果靠的很近则合并成一个
+MERGE_CLOSE_CROSS_POINT_MIN_DISTANCE = 10
+
+# 四边形两条对边中，较小值/较大值 的比例不能小于该值
+DOC_SIDE_MIN_RATIO = 0.7
+
+# 四边形对角的角度差值最大不能超过该值
+DOC_ANGLE_MAX_DIFF = 10
+
+# 四边形角度约束
+INTERSECTION_ANGLE_MIN = 45
+INTERSECTION_ANGLE_MAX = 135
 
 
 def main(args):
@@ -173,12 +181,84 @@ def main(args):
         for j in range(i + 1, len(merged_extended_lines)):
             _line = merged_extended_lines[j]
             point = line.cross(_line)
-            if point is not None:
+            if point is not None and point_valid(point, height, width):
                 cross_pnts.append((point, [line, _line]))
                 cv2.circle(merged_lines_img, (int(point[0]), int(point[1])), 5, color=(0, 0, 255), thickness=2)
+
+    print("Cross points num: %d" % len(cross_pnts))
     watch(merged_lines_img, "Extended Lines cross point")
 
-    # 每次取四个点
+    # 合并临近的交点
+    merged_cross_pnts = []
+    merged_pnts = {}
+    for i in range(len(cross_pnts)):
+        if i in merged_pnts:
+            continue
+
+        pnt = cross_pnts[i][0]
+        for j in range(i + 1, len(cross_pnts)):
+            if j in merged_pnts:
+                continue
+
+            _pnt = cross_pnts[j][0]
+            if distance(pnt, _pnt) < MERGE_CLOSE_CROSS_POINT_MIN_DISTANCE:
+                merged_lines[j] = j
+                cross_pnts[i][0] = (pnt + _pnt) / 2
+
+        cv2.circle(merged_lines_img, (int(pnt[0]), int(pnt[1])), 5, color=(0, 255, 255), thickness=2)
+        merged_cross_pnts.append(cross_pnts[i])
+
+    print("Merged cross points num: %d" % len(merged_cross_pnts))
+    watch(merged_lines_img, "Merged cross points")
+
+    # 每次取四个点，以顺时针排列，过滤掉不合理的四边形
+    rect_pnts = []
+    valid_pnts_img = image.copy()
+    for four_pnts in combinations(cross_pnts, 4):
+        pnts = np.array([x[0] for x in four_pnts])
+        pnts = clockwise_points(pnts)
+        top_line = Line(pnts[0], pnts[1])
+        right_line = Line(pnts[1], pnts[2])
+        bottom_line = Line(pnts[2], pnts[3])
+        left_line = Line(pnts[3], pnts[0])
+
+        # 角度约束
+        if not angle_valid(top_line.angle_to(right_line)):
+            continue
+        if not angle_valid(right_line.angle_to(bottom_line)):
+            continue
+        if not angle_valid(bottom_line.angle_to(left_line)):
+            continue
+        if not angle_valid(left_line.angle_to(top_line)):
+            continue
+
+        angle_diff1 = abs(top_line.angle_to(right_line) - left_line.angle_to(bottom_line)) % 90
+        angle_diff2 = abs(top_line.angle_to(left_line) - right_line.angle_to(bottom_line)) % 90
+        print("Angle diff 1: %f" % angle_diff1)
+        print("Angle diff 2: %f" % angle_diff2)
+        if angle_diff1 > DOC_ANGLE_MAX_DIFF:
+            continue
+        if angle_diff2 > DOC_ANGLE_MAX_DIFF:
+            continue
+
+        # 对边长度约束
+        if min(top_line.length, bottom_line.length) / max(top_line.length, bottom_line.length) < DOC_SIDE_MIN_RATIO:
+            continue
+
+        if min(left_line.length, right_line.length) / max(left_line.length, right_line.length) < DOC_SIDE_MIN_RATIO:
+            continue
+
+        rect_pnts.append(pnts)
+        valid_pnts_img = draw_four_vectors(valid_pnts_img, pnts)
+
+        tmp = image.copy()
+        tmp = draw_four_vectors(tmp, pnts)
+        watch(tmp, "Valid rects")
+
+    print("Valid rect pnts group: %d" % len(rect_pnts))
+    watch(valid_pnts_img, "Valid rects")
+
+
 
 
     # 做投影变换，摆正视图，目标视图的比例应该和文档的比例相关
@@ -193,6 +273,21 @@ def main(args):
     #
     # dst = cv2.cvtColor(dst, cv2.COLOR_BGR2GRAY)
     # watch(dst, 'Result')
+
+
+def angle_valid(angle):
+    return INTERSECTION_ANGLE_MIN <= angle <= INTERSECTION_ANGLE_MAX
+
+
+def point_valid(pnt, height, width):
+    """
+    点坐标是否处于图片内部
+    """
+    if pnt[0] > width or pnt[0] < 0:
+        return False
+    if pnt[1] > height or pnt[1] < 0:
+        return False
+    return True
 
 
 def parse_args():

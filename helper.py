@@ -1,6 +1,9 @@
 import math
+
+import cv2
 import numpy as np
 from scipy.spatial import distance as dist
+
 
 # https://www.pyimagesearch.com/2016/03/21/ordering-coordinates-clockwise-with-python-and-opencv/
 def clockwise_points(pnts):
@@ -73,6 +76,28 @@ class Line:
         self.p0 = new_p0 / 2
         self.p1 = new_p1 / 2
 
+    def close_to(self, line, max_dis) -> bool:
+        if distance(self.left_point, line.left_point) > max_dis:
+            return False
+        if distance(self.right_point, line.right_point) > max_dis:
+            return False
+        return True
+
+    def angle_to(self, line):
+        return (self.angle - line.angle) % 180
+
+    @property
+    def length(self):
+        return distance(self.p0, self.p1)
+
+    @property
+    def angle(self):
+        # http://opencv-users.1802565.n2.nabble.com/Angle-between-2-lines-td6803229.html
+        # https://stackoverflow.com/questions/2339487/calculate-angle-of-2-points
+        angle = math.atan2(self.p1[1] - self.p0[1], self.p1[0] - self.p0[0]) * 180 / math.pi
+        angle = (int(angle) + 360) % 360
+        return angle
+
     @property
     def left_point(self):
         if self.p0[0] < self.p1[0]:
@@ -105,13 +130,31 @@ class Line:
     def int_p1(self):
         return int(self.p1[0]), int(self.p1[1])
 
-    def close_to(self, line, max_dis) -> bool:
-        if distance(self.left_point, line.left_point) > max_dis:
-            return False
-        if distance(self.right_point, line.right_point) > max_dis:
-            return False
-        return True
-
 
 def distance(p0, p1):
     return np.linalg.norm(p0 - p1, ord=2)
+
+
+def draw_four_vectors(img, line, color=(0, 255, 0), draw_text=True):
+    """
+    :param line: [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]
+        矩形四点坐标的顺序： left-top, right-top, right-bottom, left-bottom
+    """
+    img = cv2.line(img, (line[0][0], line[0][1]), (line[1][0], line[1][1]), color)
+    img = cv2.line(img, (line[1][0], line[1][1]), (line[2][0], line[2][1]), color)
+    img = cv2.line(img, (line[2][0], line[2][1]), (line[3][0], line[3][1]), color)
+    img = cv2.line(img, (line[3][0], line[3][1]), (line[0][0], line[0][1]), color)
+
+    if draw_text:
+        cv2.putText(img, 'top', (int((line[0][0] + line[1][0]) / 2), int((line[0][1] + line[1][1]) / 2)),
+                    fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1, color=(0, 0, 255))
+
+        cv2.putText(img, 'right', (int((line[1][0] + line[2][0]) / 2), int((line[1][1] + line[2][1]) / 2)),
+                    fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1, color=(0, 0, 255))
+
+        cv2.putText(img, 'bottom', (int((line[2][0] + line[3][0]) / 2), int((line[2][1] + line[3][1]) / 2)),
+                    fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1, color=(0, 0, 255))
+
+        cv2.putText(img, 'left', (int((line[3][0] + line[0][0]) / 2), int((line[3][1] + line[0][1]) / 2)),
+                    fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1, color=(0, 0, 255))
+    return img
