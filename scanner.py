@@ -26,6 +26,9 @@ LINE_LENGTH_THRESH = 150  # 过滤霍夫直线检测的结果
 INTERSECTION_ANGLE_MIN = 45
 INTERSECTION_ANGLE_MAX = 135
 
+# 合并靠的比较近的直线，用的阈值
+MERGE_LINE_MAX_DISTANCE = 20
+
 
 def main(args):
     image = cv2.imread(args.img)
@@ -70,6 +73,7 @@ def main(args):
     print("Filtered contours num: %d" % len(filtered_contours))
     # watch(contours_img, 'Contours image')
 
+    # 对轮廓图进行霍夫变换检测直线
     lines = cv2.HoughLinesP(contours_img, 1, np.pi / 180, HOUGH_THRESH, HOUGH_MIN_LINE_LENGTH, HOUGH_MAX_LINE_GAP)
     filterd_lines = []
     if lines is not None:
@@ -78,6 +82,7 @@ def main(args):
         lines_img = image.copy()
         for line in lines:
             x1, y1, x2, y2 = line[0]
+            # 过滤掉长度过短的直线
             if np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2) < LINE_LENGTH_THRESH:
                 continue
             filterd_lines.append(line[0])
@@ -127,18 +132,45 @@ def main(args):
 
         cv2.line(extended_lines_img, (extend_x1, extend_y1), (extend_x2, extend_y2), (0, 255, 0), 1)
         extended_lines.append(Line(Point(extend_x1, extend_y1), Point(extend_x2, extend_y2)))
+    watch(extended_lines_img, "Extended Lines")
 
-    # 合并斜率相近，并且烤的很近的直线
-
+    # 合并斜率相近，并且靠的很近的直线
+    merged_extended_lines = []
+    merged_lines = {}
+    merged_lines_img = image.copy()
     for i in range(len(extended_lines)):
+        if i in merged_lines:
+            continue
+
         line = extended_lines[i]
         for j in range(i + 1, len(extended_lines)):
+            if j in merged_lines:
+                continue
+
             _line = extended_lines[j]
+            if line.close_to(_line, MERGE_LINE_MAX_DISTANCE):
+                merged_lines[j] = j
+                line.merge(_line)
+
+        merged_extended_lines.append(line)
+
+    for line in merged_extended_lines:
+        cv2.line(merged_lines_img, (line.p0.x, line.p0.y), (line.p1.x, line.p1.y), color=(0, 255, 0))
+
+    print("Lines num after merge: %d" % len(merged_extended_lines))
+    watch(merged_lines_img, "Merged Lines")
+
+    # 获得线段的延长线交点
+    for i in range(len(merged_extended_lines)):
+        line = merged_extended_lines[i]
+        for j in range(i + 1, len(merged_extended_lines)):
+            _line = merged_extended_lines[j]
             point = line.cross(_line)
             if point:
-                cv2.circle(extended_lines_img, (point.x, point.y), 2, color=(0, 0, 200))
+                cv2.circle(merged_lines_img, (point.x, point.y), 5, color=(0, 0, 255), thickness=2)
+    watch(merged_lines_img, "Extended Lines cross point")
 
-    watch(extended_lines_img, "Extended Lines")
+
 
 
 
