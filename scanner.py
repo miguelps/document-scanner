@@ -37,8 +37,8 @@ DOC_SIDE_MIN_RATIO = 0.7
 DOC_ANGLE_MAX_DIFF = 10
 
 # 四边形角度约束
-INTERSECTION_ANGLE_MIN = 45
-INTERSECTION_ANGLE_MAX = 135
+INTERSECTION_ANGLE_MIN = 60
+INTERSECTION_ANGLE_MAX = 110
 
 
 def main(args):
@@ -222,6 +222,13 @@ def main(args):
         bottom_line = Line(pnts[2], pnts[3])
         left_line = Line(pnts[3], pnts[0])
 
+        # 对边长度约束
+        if min(top_line.length, bottom_line.length) / max(top_line.length, bottom_line.length) < DOC_SIDE_MIN_RATIO:
+            continue
+
+        if min(left_line.length, right_line.length) / max(left_line.length, right_line.length) < DOC_SIDE_MIN_RATIO:
+            continue
+
         # 角度约束
         if not angle_valid(top_line.angle_to(right_line)):
             continue
@@ -232,20 +239,28 @@ def main(args):
         if not angle_valid(left_line.angle_to(top_line)):
             continue
 
-        angle_diff1 = abs(top_line.angle_to(right_line) - left_line.angle_to(bottom_line)) % 90
-        angle_diff2 = abs(top_line.angle_to(left_line) - right_line.angle_to(bottom_line)) % 90
+        print("Top line angle %f" % top_line.angle)
+        print("Right line angle %f" % right_line.angle)
+        print("Bottom line angle %f" % bottom_line.angle)
+        print("Left line angle %f" % left_line.angle)
+
+        print("Top-right angle %f" % top_line.angle_to(right_line))
+        print("Bottom-left angle %f" % bottom_line.angle_to(left_line))
+
+        print("Top-left angle %f" % top_line.angle_to(left_line))
+        print("Bottom-right angle %f" % bottom_line.angle_to(right_line))
+
+        tmp = image.copy()
+        tmp = draw_four_vectors(tmp, pnts)
+        watch(tmp, "trbl rects")
+
+        angle_diff1 = abs(top_line.angle_to(right_line) - bottom_line.angle_to(left_line)) % 90
+        angle_diff2 = abs(top_line.angle_to(left_line) - bottom_line.angle_to(right_line)) % 90
         print("Angle diff 1: %f" % angle_diff1)
         print("Angle diff 2: %f" % angle_diff2)
         if angle_diff1 > DOC_ANGLE_MAX_DIFF:
             continue
         if angle_diff2 > DOC_ANGLE_MAX_DIFF:
-            continue
-
-        # 对边长度约束
-        if min(top_line.length, bottom_line.length) / max(top_line.length, bottom_line.length) < DOC_SIDE_MIN_RATIO:
-            continue
-
-        if min(left_line.length, right_line.length) / max(left_line.length, right_line.length) < DOC_SIDE_MIN_RATIO:
             continue
 
         rect_pnts.append(pnts)
@@ -257,9 +272,6 @@ def main(args):
 
     print("Valid rect pnts group: %d" % len(rect_pnts))
     watch(valid_pnts_img, "Valid rects")
-
-
-
 
     # 做投影变换，摆正视图，目标视图的比例应该和文档的比例相关
     # approx = rectify(target)

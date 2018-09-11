@@ -84,7 +84,7 @@ class Line:
         return True
 
     def angle_to(self, line):
-        return (self.angle - line.angle) % 180
+        return 180 - abs((self.angle - line.angle) % 180)
 
     @property
     def length(self):
@@ -92,11 +92,16 @@ class Line:
 
     @property
     def angle(self):
+        # 返回与 x 轴的夹角
         # http://opencv-users.1802565.n2.nabble.com/Angle-between-2-lines-td6803229.html
         # https://stackoverflow.com/questions/2339487/calculate-angle-of-2-points
-        angle = math.atan2(self.p1[1] - self.p0[1], self.p1[0] - self.p0[0]) * 180 / math.pi
-        angle = (int(angle) + 360) % 360
-        return angle
+        angle = math.atan2(self.right_point[1] - self.left_point[1],
+                           self.right_point[0] - self.left_point[0])
+        angle = angle * 180 / math.pi
+        # angle = (int(angle) + 360) % 360
+        if angle < 0:
+            angle = 180 + angle
+        return int(angle)
 
     @property
     def left_point(self):
