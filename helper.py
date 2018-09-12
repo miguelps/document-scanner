@@ -4,7 +4,6 @@ import cv2
 import numpy as np
 from scipy.spatial import distance as dist
 
-
 # https://www.pyimagesearch.com/2016/03/21/ordering-coordinates-clockwise-with-python-and-opencv/
 def clockwise_points(pnts):
     """
@@ -163,3 +162,22 @@ def draw_four_vectors(img, line, color=(0, 255, 0), draw_text=True):
         cv2.putText(img, 'left', (int((line[3][0] + line[0][0]) / 2), int((line[3][1] + line[0][1]) / 2)),
                     fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1, color=(0, 0, 255))
     return img
+
+
+def cos_angle(v1, v2):
+    """
+    使用 acos 求两个向量的夹角，注意向量的方向
+    v1, v2 为 numpy 数组
+    """
+    l1 = np.sqrt(v1.dot(v1))
+    l2 = np.sqrt(v2.dot(v2))
+
+    cos = v1.dot(v2) / (l1 * l2)
+    return np.rad2deg(np.arccos(cos))
+
+
+def watch(img, name):
+    cv2.namedWindow(name, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(name, 1200*2, 800*2)
+    cv2.imshow(name, img)
+    cv2.waitKey()

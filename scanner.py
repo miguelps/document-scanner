@@ -6,10 +6,7 @@ from itertools import combinations
 import argparse
 import os
 
-import cv2
-import numpy as np
-
-from helper import Line, clockwise_points, draw_four_vectors, distance
+from helper import *
 
 MAX_LENGTH = 1200  # 图片的长边 resize 到 MAX_LENGTH
 
@@ -19,22 +16,24 @@ CANNY_THRESH_MAX = 50  # 大于这个阈值的像素才会被认为是边缘
 CONTOURS_LENGTH_THRESH = 200
 CONTOURS_AREA_THRESH = 50
 
-HOUGH_THRESH = 200
+HOUGH_THRESH = 150
 HOUGH_MIN_LINE_LENGTH = 20
 HOUGH_MAX_LINE_GAP = 50
 LINE_LENGTH_THRESH = 150  # 过滤霍夫直线检测的结果
 
-# 合并靠的比较近的直线，用的阈值
+# 合并靠的比较近的直线
 MERGE_LINE_MAX_DISTANCE = 50
 
 # 两个交点如果靠的很近则合并成一个
-MERGE_CLOSE_CROSS_POINT_MIN_DISTANCE = 10
+MERGE_CLOSE_CROSS_POINT_MIN_DISTANCE = 20
 
 # 四边形两条对边中，较小值/较大值 的比例不能小于该值
-DOC_SIDE_MIN_RATIO = 0.7
+DOC_SIDE_MIN_RATIO = 0.8
+# 四边形的相邻边的比例最大不能超过该值
+DOC_SIDE_MAX_RATIO = 2.5
 
 # 四边形对角的角度差值最大不能超过该值
-DOC_ANGLE_MAX_DIFF = 10
+DOC_ANGLE_MAX_DIFF = 30
 
 # 四边形角度约束
 INTERSECTION_ANGLE_MIN = 60
@@ -46,6 +45,7 @@ def main(args):
     # watch(image, 'Origin')
     print("Origin size: %s" % str(image.shape))
 
+    # 把图片缩放到一定的尺度，否则调的参数很难起作用
     scale = 1200 / max(image.shape)
     image = cv2.resize(image, None, None, fx=scale, fy=scale)
     height = image.shape[0]
@@ -64,7 +64,7 @@ def main(args):
     # watch(blurred, 'Blur')
 
     edged = cv2.Canny(blurred, CANNY_THRESH_MIN, CANNY_THRESH_MAX)
-    # watch(edged, 'Canny edged')
+    watch(edged, 'Canny edged')
 
     _, contours, aa = cv2.findContours(edged, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     print("Contours num: %d" % len(contours))
@@ -82,7 +82,7 @@ def main(args):
         cv2.drawContours(contours_img, [c], -1, (255, 255, 255), 3)
 
     print("Filtered contours num: %d" % len(filtered_contours))
-    # watch(contours_img, 'Contours image')
+    watch(contours_img, 'Contours image')
 
     # 对轮廓图进行霍夫变换检测直线
     lines = cv2.HoughLinesP(contours_img, 1, np.pi / 180, HOUGH_THRESH, HOUGH_MIN_LINE_LENGTH, HOUGH_MAX_LINE_GAP)
@@ -182,7 +182,7 @@ def main(args):
             _line = merged_extended_lines[j]
             point = line.cross(_line)
             if point is not None and point_valid(point, height, width):
-                cross_pnts.append((point, [line, _line]))
+                cross_pnts.append(point)
                 cv2.circle(merged_lines_img, (int(point[0]), int(point[1])), 5, color=(0, 0, 255), thickness=2)
 
     print("Cross points num: %d" % len(cross_pnts))
@@ -195,15 +195,15 @@ def main(args):
         if i in merged_pnts:
             continue
 
-        pnt = cross_pnts[i][0]
+        pnt = cross_pnts[i]
         for j in range(i + 1, len(cross_pnts)):
             if j in merged_pnts:
                 continue
 
-            _pnt = cross_pnts[j][0]
+            _pnt = cross_pnts[j]
             if distance(pnt, _pnt) < MERGE_CLOSE_CROSS_POINT_MIN_DISTANCE:
-                merged_lines[j] = j
-                cross_pnts[i][0] = (pnt + _pnt) / 2
+                merged_pnts[j] = j
+                cross_pnts[i] = (pnt + _pnt) / 2
 
         cv2.circle(merged_lines_img, (int(pnt[0]), int(pnt[1])), 5, color=(0, 255, 255), thickness=2)
         merged_cross_pnts.append(cross_pnts[i])
@@ -214,50 +214,69 @@ def main(args):
     # 每次取四个点，以顺时针排列，过滤掉不合理的四边形
     rect_pnts = []
     valid_pnts_img = image.copy()
-    for four_pnts in combinations(cross_pnts, 4):
-        pnts = np.array([x[0] for x in four_pnts])
-        pnts = clockwise_points(pnts)
+    for pnts in combinations(merged_cross_pnts, 4):
+        pnts = clockwise_points(np.asarray(list(pnts)))
         top_line = Line(pnts[0], pnts[1])
         right_line = Line(pnts[1], pnts[2])
         bottom_line = Line(pnts[2], pnts[3])
         left_line = Line(pnts[3], pnts[0])
 
-        # 对边长度约束
+        # 对边长度差约束
         if min(top_line.length, bottom_line.length) / max(top_line.length, bottom_line.length) < DOC_SIDE_MIN_RATIO:
             continue
 
         if min(left_line.length, right_line.length) / max(left_line.length, right_line.length) < DOC_SIDE_MIN_RATIO:
             continue
 
-        # 角度约束
-        if not angle_valid(top_line.angle_to(right_line)):
+        # 相邻边比例约束
+        if max(top_line.length, right_line.length) / min(top_line.length, right_line.length) > DOC_SIDE_MAX_RATIO:
             continue
-        if not angle_valid(right_line.angle_to(bottom_line)):
+        if max(top_line.length, left_line.length) / min(top_line.length, left_line.length) > DOC_SIDE_MAX_RATIO:
             continue
-        if not angle_valid(bottom_line.angle_to(left_line)):
+        if max(bottom_line.length, right_line.length) / min(bottom_line.length, right_line.length) > DOC_SIDE_MAX_RATIO:
             continue
-        if not angle_valid(left_line.angle_to(top_line)):
+        if max(bottom_line.length, left_line.length) / min(bottom_line.length, left_line.length) > DOC_SIDE_MAX_RATIO:
             continue
 
+        # 角度约束
+        top_left_angle = cos_angle(pnts[1] - pnts[0], pnts[3] - pnts[0])
+        top_right_angle = cos_angle(pnts[0] - pnts[1], pnts[2] - pnts[1])
+        bottom_right_angle = cos_angle(pnts[1] - pnts[2], pnts[3] - pnts[2])
+        bottom_left_angle = cos_angle(pnts[0] - pnts[3], pnts[2] - pnts[3])
+
+        print("*" * 20)
+        print("Top left angle %f" % top_left_angle)
+        print("Top right angle %f" % top_right_angle)
+        print("Bottom right angle %f" % bottom_right_angle)
+        print("Bottom left angle %f" % bottom_left_angle)
+
+        if not angle_valid(top_left_angle):
+            continue
+        if not angle_valid(top_right_angle):
+            continue
+        if not angle_valid(bottom_right_angle):
+            continue
+        if not angle_valid(bottom_left_angle):
+            continue
+
+        print("-" * 20)
         print("Top line angle %f" % top_line.angle)
         print("Right line angle %f" % right_line.angle)
         print("Bottom line angle %f" % bottom_line.angle)
         print("Left line angle %f" % left_line.angle)
 
-        print("Top-right angle %f" % top_line.angle_to(right_line))
-        print("Bottom-left angle %f" % bottom_line.angle_to(left_line))
+        # 约束两组对角的差
+        angle_diff1 = abs(top_left_angle - bottom_right_angle)
+        angle_diff2 = abs(top_right_angle - bottom_left_angle)
 
-        print("Top-left angle %f" % top_line.angle_to(left_line))
-        print("Bottom-right angle %f" % bottom_line.angle_to(right_line))
-
-        tmp = image.copy()
-        tmp = draw_four_vectors(tmp, pnts)
-        watch(tmp, "trbl rects")
-
-        angle_diff1 = abs(top_line.angle_to(right_line) - bottom_line.angle_to(left_line)) % 90
-        angle_diff2 = abs(top_line.angle_to(left_line) - bottom_line.angle_to(right_line)) % 90
+        print("-" * 20)
         print("Angle diff 1: %f" % angle_diff1)
         print("Angle diff 2: %f" % angle_diff2)
+
+        # tmp = image.copy()
+        # tmp = draw_four_vectors(tmp, pnts)
+        # watch(tmp, "trbl rects")
+
         if angle_diff1 > DOC_ANGLE_MAX_DIFF:
             continue
         if angle_diff2 > DOC_ANGLE_MAX_DIFF:
@@ -266,25 +285,32 @@ def main(args):
         rect_pnts.append(pnts)
         valid_pnts_img = draw_four_vectors(valid_pnts_img, pnts)
 
-        tmp = image.copy()
-        tmp = draw_four_vectors(tmp, pnts)
-        watch(tmp, "Valid rects")
-
     print("Valid rect pnts group: %d" % len(rect_pnts))
     watch(valid_pnts_img, "Valid rects")
 
+    if len(rect_pnts) == 0:
+        print("Not found valid document")
+        return
+
+    # TODO： 进一步添加约束策略，如面积、是否居于图片中心，整体旋转的角度等
+
+    rect = rect_pnts[0]
+    min_rect = cv2.minAreaRect(rect)
+    min_rect = cv2.boxPoints(min_rect)
+    min_rect = clockwise_points(min_rect)
+
+    scale = abs(min_rect[1][1] - min_rect[2][1]) / abs(min_rect[0][0] - min_rect[1][0])
+    result_w = 800
+    result_h = int(result_w * scale)
+
     # 做投影变换，摆正视图，目标视图的比例应该和文档的比例相关
-    # approx = rectify(target)
-    # pts2 = np.float32([[0, 0], [800, 0], [800, 800], [0, 800]])
-    #
-    # M = cv2.getPerspectiveTransform(approx, pts2)
-    # dst = cv2.warpPerspective(image, M, (800, 800))
-    #
-    # cv2.drawContours(image, [target], -1, (0, 255, 0), 2)
-    # watch(image, 'Image with contours')
-    #
-    # dst = cv2.cvtColor(dst, cv2.COLOR_BGR2GRAY)
-    # watch(dst, 'Result')
+    pts2 = np.float32([[0, 0], [result_w, 0], [result_w, result_h], [0, result_h]])
+
+    M = cv2.getPerspectiveTransform(rect, pts2)
+    dst = cv2.warpPerspective(image, M, (result_w, result_h))
+
+    dst = cv2.cvtColor(dst, cv2.COLOR_BGR2GRAY)
+    watch(dst, 'Result')
 
 
 def angle_valid(angle):
@@ -304,7 +330,7 @@ def point_valid(pnt, height, width):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--img', default='./demo.jpg')
+    parser.add_argument('--img', default='./images/demo.jpg')
     parser.add_argument('--mode', default='img', choices=['img', 'webcam'])
 
     args = parser.parse_args()
@@ -313,28 +339,6 @@ def parse_args():
         parser.error("Image not exist.")
 
     return args
-
-
-def rectify(h):
-    h = h.reshape((4, 2))
-    hnew = np.zeros((4, 2), dtype=np.float32)
-
-    add = h.sum(1)
-    hnew[0] = h[np.argmin(add)]
-    hnew[2] = h[np.argmax(add)]
-
-    diff = np.diff(h, axis=1)
-    hnew[1] = h[np.argmin(diff)]
-    hnew[3] = h[np.argmax(diff)]
-
-    return hnew
-
-
-def watch(img, name):
-    cv2.namedWindow(name, cv2.WINDOW_NORMAL)
-    cv2.resizeWindow(name, 1200, 800)
-    cv2.imshow(name, img)
-    cv2.waitKey()
 
 
 if __name__ == '__main__':
