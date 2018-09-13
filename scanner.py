@@ -198,9 +198,9 @@ def main(args):
         bottom_line = Line(pnts[2], pnts[3])
         left_line = Line(pnts[3], pnts[0])
 
-        # tmp = image.copy()
-        # tmp = draw_four_vectors(tmp, pnts)
-        # watch(tmp, "trbl rects")
+        tmp = image.copy()
+        tmp = draw_four_vectors(tmp, pnts)
+        watch(tmp, "trbl rects")
 
         # 判断四条边是否与形成较角点的直线靠近，只要有一条边不满足则 continue
         if not line_valid(top_line, lines, height, width):

@@ -175,6 +175,13 @@ def draw_four_vectors(img, line, color=(0, 255, 0), draw_text=True):
     img = cv2.line(img, (line[3][0], line[3][1]), (line[0][0], line[0][1]), color)
 
     if draw_text:
+        # draw corner name
+        cv2.putText(img, 'lt', (line[0][0], line[0][1]), fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1, color=(0, 0, 255))
+        cv2.putText(img, 'rt', (line[1][0], line[1][1]), fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1, color=(0, 0, 255))
+        cv2.putText(img, 'rb', (line[2][0], line[2][1]), fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1, color=(0, 0, 255))
+        cv2.putText(img, 'lb', (line[3][0], line[3][1]), fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1, color=(0, 0, 255))
+
+        # draw line name
         cv2.putText(img, 'top', (int((line[0][0] + line[1][0]) / 2), int((line[0][1] + line[1][1]) / 2)),
                     fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1, color=(0, 0, 255))
 
