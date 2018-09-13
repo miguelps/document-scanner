@@ -30,7 +30,7 @@ MERGE_CLOSE_CROSS_POINT_MIN_DISTANCE = 20
 # 四边形两条对边中，较小值/较大值 的比例不能小于该值
 DOC_SIDE_MIN_RATIO = 0.8
 # 四边形的相邻边的比例最大不能超过该值
-DOC_SIDE_MAX_RATIO = 2.5
+DOC_SIDE_MAX_RATIO = 3
 
 # 四边形对角的角度差值最大不能超过该值
 DOC_ANGLE_MAX_DIFF = 30
@@ -198,6 +198,10 @@ def main(args):
         bottom_line = Line(pnts[2], pnts[3])
         left_line = Line(pnts[3], pnts[0])
 
+        # tmp = image.copy()
+        # tmp = draw_four_vectors(tmp, pnts)
+        # watch(tmp, "trbl rects")
+
         # 判断四条边是否与形成较角点的直线靠近，只要有一条边不满足则 continue
         if not line_valid(top_line, lines, height, width):
             continue
@@ -207,6 +211,7 @@ def main(args):
             continue
         if not line_valid(left_line, lines, height, width):
             continue
+        print("===Pass line_valid===")
 
         # 对边长度差约束
         if min(top_line.length, bottom_line.length) / max(top_line.length, bottom_line.length) < DOC_SIDE_MIN_RATIO:
@@ -214,6 +219,7 @@ def main(args):
 
         if min(left_line.length, right_line.length) / max(left_line.length, right_line.length) < DOC_SIDE_MIN_RATIO:
             continue
+        print("===Pass doc min_side/max_side ratio===")
 
         # 相邻边比例约束
         if max(top_line.length, right_line.length) / min(top_line.length, right_line.length) > DOC_SIDE_MAX_RATIO:
@@ -224,6 +230,7 @@ def main(args):
             continue
         if max(bottom_line.length, left_line.length) / min(bottom_line.length, left_line.length) > DOC_SIDE_MAX_RATIO:
             continue
+        print("===Pass doc max/min ratio===")
 
         # 角度约束
         top_left_angle = cos_angle(pnts[1] - pnts[0], pnts[3] - pnts[0])
@@ -245,6 +252,7 @@ def main(args):
             continue
         if not angle_valid(bottom_left_angle):
             continue
+        print("===Pass angle_valid===")
 
         print("-" * 20)
         print("Top line angle %f" % top_line.angle)
@@ -260,14 +268,11 @@ def main(args):
         print("Angle diff 1: %f" % angle_diff1)
         print("Angle diff 2: %f" % angle_diff2)
 
-        # tmp = image.copy()
-        # tmp = draw_four_vectors(tmp, pnts)
-        # watch(tmp, "trbl rects")
-
         if angle_diff1 > DOC_ANGLE_MAX_DIFF:
             continue
         if angle_diff2 > DOC_ANGLE_MAX_DIFF:
             continue
+        print("===Pass angle diff===")
 
         rect_pnts.append(pnts)
         valid_pnts_img = draw_four_vectors(valid_pnts_img, pnts)
@@ -380,7 +385,7 @@ def get_extend_line(line, height, width):
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--img', default='./images/demo.jpg')
+    parser.add_argument('--img', default='./images/test.jpg')
     parser.add_argument('--mode', default='img', choices=['img', 'webcam'])
 
     args = parser.parse_args()

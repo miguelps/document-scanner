@@ -4,6 +4,7 @@ import cv2
 import numpy as np
 from scipy.spatial import distance as dist
 
+
 # https://www.pyimagesearch.com/2016/03/21/ordering-coordinates-clockwise-with-python-and-opencv/
 def clockwise_points(pnts):
     """
@@ -76,11 +77,35 @@ class Line:
         self.p1 = new_p1 / 2
 
     def close_to(self, line, max_dis) -> bool:
-        if distance(self.left_point, line.left_point) > max_dis:
-            return False
-        if distance(self.right_point, line.right_point) > max_dis:
-            return False
-        return True
+        # 这种判断方法是错误的，因为两条直线的左右点可能对应不起来
+        # left_dis = distance(self.left_point, line.left_point)
+        # if left_dis > max_dis:
+        #     return False
+        #
+        # right_dis = distance(self.right_point, line.right_point)
+        # if right_dis > max_dis:
+        #     return False
+
+        # TODO: 优化逻辑，减少计算
+        left_close = False
+        left_dis = distance(self.left_point, line.left_point)
+        if left_dis < max_dis:
+            left_close = True
+
+        left_dis = distance(self.left_point, line.right_point)
+        if left_dis < max_dis:
+            left_close = True
+
+        right_close = False
+        right_dis = distance(self.right_point, line.left_point)
+        if right_dis < max_dis:
+            right_close = True
+
+        right_dis = distance(self.right_point, line.right_point)
+        if right_dis < max_dis:
+            right_close = True
+
+        return left_close and right_close
 
     def angle_to(self, line):
         return 180 - abs((self.angle - line.angle) % 180)
@@ -178,6 +203,6 @@ def cos_angle(v1, v2):
 
 def watch(img, name):
     cv2.namedWindow(name, cv2.WINDOW_NORMAL)
-    cv2.resizeWindow(name, 1200*2, 800*2)
+    cv2.resizeWindow(name, 1200 * 2, 800 * 2)
     cv2.imshow(name, img)
     cv2.waitKey()
