@@ -106,41 +106,7 @@ def main(args):
     extended_lines = []
     extended_lines_img = image.copy()
     for line in filterd_lines:
-        x1, y1, x2, y2 = line
-
-        if x1 == x2:
-            # 竖直的线
-            extend_x1 = extend_x2 = x1
-            extend_y1 = 0
-            extend_y2 = height
-        elif y2 == y1:
-            # 水平的线
-            extend_x1 = 0
-            extend_y1 = extend_y2 = y1
-            extend_x2 = width
-        else:
-            k = float(y2 - y1) / float(x2 - x1)
-
-            extend_y1 = 0
-            extend_x1 = x1 - y1 / k
-            if extend_x1 < 0:
-                extend_x1 = 0
-                extend_y1 = y1 - k * x1
-            elif extend_x1 >= width:
-                extend_x1 = width
-                extend_y1 = y1 + k * (width - x1)
-
-            extend_y2 = height
-            extend_x2 = x2 + (height - y2) / k
-            if extend_x2 > width:
-                extend_x2 = width
-                extend_y2 = y2 + k * (width - x2)
-            elif extend_x2 < 0:
-                extend_x2 = 0
-                extend_y2 = y2 - k * x2
-
-            extend_x1, extend_y1, extend_x2, extend_y2 = int(extend_x1), int(extend_y1), int(extend_x2), int(extend_y2)
-
+        extend_x1, extend_y1, extend_x2, extend_y2 = get_extend_line(line, height, width)
         cv2.line(extended_lines_img, (extend_x1, extend_y1), (extend_x2, extend_y2), (0, 255, 0), 1)
 
         p0 = np.array([extend_x1, extend_y1])
@@ -176,6 +142,7 @@ def main(args):
 
     # 获得线段的延长线交点
     cross_pnts = []
+    cross_pnts_lines = []
     for i in range(len(merged_extended_lines)):
         line = merged_extended_lines[i]
         for j in range(i + 1, len(merged_extended_lines)):
@@ -183,6 +150,7 @@ def main(args):
             point = line.cross(_line)
             if point is not None and point_valid(point, height, width):
                 cross_pnts.append(point)
+                cross_pnts_lines.append((line, _line))
                 cv2.circle(merged_lines_img, (int(point[0]), int(point[1])), 5, color=(0, 0, 255), thickness=2)
 
     print("Cross points num: %d" % len(cross_pnts))
@@ -190,6 +158,7 @@ def main(args):
 
     # 合并临近的交点
     merged_cross_pnts = []
+    merged_cross_pnts_lines = []
     merged_pnts = {}
     for i in range(len(cross_pnts)):
         if i in merged_pnts:
@@ -207,6 +176,7 @@ def main(args):
 
         cv2.circle(merged_lines_img, (int(pnt[0]), int(pnt[1])), 5, color=(0, 255, 255), thickness=2)
         merged_cross_pnts.append(cross_pnts[i])
+        merged_cross_pnts_lines.append(cross_pnts_lines[i])
 
     print("Merged cross points num: %d" % len(merged_cross_pnts))
     watch(merged_lines_img, "Merged cross points")
@@ -214,12 +184,29 @@ def main(args):
     # 每次取四个点，以顺时针排列，过滤掉不合理的四边形
     rect_pnts = []
     valid_pnts_img = image.copy()
-    for pnts in combinations(merged_cross_pnts, 4):
+    for data in combinations(zip(merged_cross_pnts, merged_cross_pnts_lines), 4):
+        pnts = []
+        lines = []
+        for d in data:
+            pnts.append(d[0])
+            lines.append(d[1][0])
+            lines.append(d[1][1])
+
         pnts = clockwise_points(np.asarray(list(pnts)))
         top_line = Line(pnts[0], pnts[1])
         right_line = Line(pnts[1], pnts[2])
         bottom_line = Line(pnts[2], pnts[3])
         left_line = Line(pnts[3], pnts[0])
+
+        # 判断四条边是否与形成较角点的直线靠近，只要有一条边不满足则 continue
+        if not line_valid(top_line, lines, height, width):
+            continue
+        if not line_valid(right_line, lines, height, width):
+            continue
+        if not line_valid(bottom_line, lines, height, width):
+            continue
+        if not line_valid(left_line, lines, height, width):
+            continue
 
         # 对边长度差约束
         if min(top_line.length, bottom_line.length) / max(top_line.length, bottom_line.length) < DOC_SIDE_MIN_RATIO:
@@ -326,6 +313,69 @@ def point_valid(pnt, height, width):
     if pnt[1] > height or pnt[1] < 0:
         return False
     return True
+
+
+def line_valid(line, lines, height, width):
+    """
+    如果 line 与 lines 中任意一条直线重合，则返回 True，否则返回 False
+    该函数会先延长 line, 传入的 lines 应该认为是已经 extend 过了
+    """
+    line = [line.p0[0], line.p0[1], line.p1[0], line.p1[1]]
+    extend_line = get_extend_line(line, height, width)
+    p0 = np.array(extend_line[0:2])
+    p1 = np.array(extend_line[2:4])
+    extend_line = Line(p0, p1)
+    for l in lines:
+        if extend_line.close_to(l, MERGE_LINE_MAX_DISTANCE):
+            return True
+    return False
+
+
+def get_extend_line(line, height, width):
+    """
+    将 line 线段延长到图片的边缘
+    :param line: 待延长的直线段 [x1, y1, x2, y2]
+    :param height: 图片的高度
+    :param width: 图片的宽度
+    :return:
+        (x1, y1, x2, y2)
+    """
+    x1, y1, x2, y2 = line
+
+    if x1 == x2:
+        # 竖直的线
+        extend_x1 = extend_x2 = x1
+        extend_y1 = 0
+        extend_y2 = height
+    elif y2 == y1:
+        # 水平的线
+        extend_x1 = 0
+        extend_y1 = extend_y2 = y1
+        extend_x2 = width
+    else:
+        k = float(y2 - y1) / float(x2 - x1)
+
+        extend_y1 = 0
+        extend_x1 = x1 - y1 / k
+        if extend_x1 < 0:
+            extend_x1 = 0
+            extend_y1 = y1 - k * x1
+        elif extend_x1 >= width:
+            extend_x1 = width
+            extend_y1 = y1 + k * (width - x1)
+
+        extend_y2 = height
+        extend_x2 = x2 + (height - y2) / k
+        if extend_x2 > width:
+            extend_x2 = width
+            extend_y2 = y2 + k * (width - x2)
+        elif extend_x2 < 0:
+            extend_x2 = 0
+            extend_y2 = y2 - k * x2
+
+        extend_x1, extend_y1, extend_x2, extend_y2 = int(extend_x1), int(extend_y1), int(extend_x2), int(extend_y2)
+
+    return extend_x1, extend_y1, extend_x2, extend_y2
 
 
 def parse_args():
