@@ -31,8 +31,14 @@ def clockwise_points(pnts):
     # top-left and right-most points; by the Pythagorean
     # theorem, the point with the largest distance will be
     # our bottom-right point
-    D = dist.cdist(tl[np.newaxis], rightMost, "euclidean")[0]
-    (br, tr) = rightMost[np.argsort(D)[::-1], :]
+    # 使用下面这两句，在四边形是梯形时会输出错误的结果
+    # D = dist.cdist(tl[np.newaxis], rightMost, "euclidean")[0]
+    # (br, tr) = rightMost[np.argsort(D)[::-1], :]
+
+    # 根据 rightMost 的 y 坐标进行排序
+    # 如果后面有问题，可以参考 https://github.com/jrosebr1/imutils/pull/13 进行修改
+    rightMost = rightMost[np.argsort(rightMost[:, 1]), :]
+    (tr, br) = rightMost
 
     # return the coordinates in top-left, top-right,
     # bottom-right, and bottom-left order
@@ -176,10 +182,14 @@ def draw_four_vectors(img, line, color=(0, 255, 0), draw_text=True):
 
     if draw_text:
         # draw corner name
-        cv2.putText(img, 'lt', (line[0][0], line[0][1]), fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1, color=(0, 0, 255))
-        cv2.putText(img, 'rt', (line[1][0], line[1][1]), fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1, color=(0, 0, 255))
-        cv2.putText(img, 'rb', (line[2][0], line[2][1]), fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1, color=(0, 0, 255))
-        cv2.putText(img, 'lb', (line[3][0], line[3][1]), fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1, color=(0, 0, 255))
+        cv2.putText(img, 'lt', (line[0][0], line[0][1]), fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1,
+                    color=(0, 0, 255))
+        cv2.putText(img, 'rt', (line[1][0], line[1][1]), fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1,
+                    color=(0, 0, 255))
+        cv2.putText(img, 'rb', (line[2][0], line[2][1]), fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1,
+                    color=(0, 0, 255))
+        cv2.putText(img, 'lb', (line[3][0], line[3][1]), fontFace=cv2.FONT_HERSHEY_COMPLEX, fontScale=1,
+                    color=(0, 0, 255))
 
         # draw line name
         cv2.putText(img, 'top', (int((line[0][0] + line[1][0]) / 2), int((line[0][1] + line[1][1]) / 2)),

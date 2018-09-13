@@ -193,6 +193,7 @@ def main(args):
             lines.append(d[1][1])
 
         pnts = clockwise_points(np.asarray(list(pnts)))
+        # TODO: 判断是否为凸多边形？
         top_line = Line(pnts[0], pnts[1])
         right_line = Line(pnts[1], pnts[2])
         bottom_line = Line(pnts[2], pnts[3])
