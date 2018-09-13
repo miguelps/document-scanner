@@ -4,8 +4,10 @@ import cv2
 import numpy as np
 from scipy.spatial import distance as dist
 
-
 # https://www.pyimagesearch.com/2016/03/21/ordering-coordinates-clockwise-with-python-and-opencv/
+from scanner import DEBUG
+
+
 def clockwise_points(pnts):
     """
     sort clockwise
@@ -218,8 +220,11 @@ def cos_angle(v1, v2):
     return np.rad2deg(np.arccos(cos))
 
 
-def watch(img, name):
-    cv2.namedWindow(name, cv2.WINDOW_NORMAL)
-    cv2.resizeWindow(name, 1200 * 2, 800 * 2)
-    cv2.imshow(name, img)
-    cv2.waitKey()
+def watch(img, name, debug=DEBUG):
+    if debug:
+        cv2.namedWindow(name, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(name, 1200 * 2, 800 * 2)
+        cv2.imshow(name, img)
+        cv2.waitKey()
+    else:
+        pass

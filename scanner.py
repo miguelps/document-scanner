@@ -8,6 +8,8 @@ import os
 
 from helper import *
 
+DEBUG = False
+
 MAX_LENGTH = 1200  # 图片的长边 resize 到 MAX_LENGTH
 
 CANNY_THRESH_MIN = 10  # 小于这个阈值的像素不会被认为是边缘
@@ -42,7 +44,6 @@ INTERSECTION_ANGLE_MAX = 110
 
 def main(args):
     image = cv2.imread(args.img)
-    # watch(image, 'Origin')
     print("Origin size: %s" % str(image.shape))
 
     # 把图片缩放到一定的尺度，否则调的参数很难起作用
@@ -50,6 +51,7 @@ def main(args):
     image = cv2.resize(image, None, None, fx=scale, fy=scale)
     height = image.shape[0]
     width = image.shape[1]
+    watch(image, 'Resized Origin', True)
     print("Resize size: %s" % str(image.shape))
 
     # image = ndimage.rotate(image, 90)
@@ -199,9 +201,9 @@ def main(args):
         bottom_line = Line(pnts[2], pnts[3])
         left_line = Line(pnts[3], pnts[0])
 
-        tmp = image.copy()
-        tmp = draw_four_vectors(tmp, pnts)
-        watch(tmp, "trbl rects")
+        # tmp = image.copy()
+        # tmp = draw_four_vectors(tmp, pnts)
+        # watch(tmp, "trbl rects")
 
         # 判断四条边是否与形成较角点的直线靠近，只要有一条边不满足则 continue
         if not line_valid(top_line, lines, height, width):
@@ -301,9 +303,7 @@ def main(args):
 
     M = cv2.getPerspectiveTransform(rect, pts2)
     dst = cv2.warpPerspective(image, M, (result_w, result_h))
-
-    dst = cv2.cvtColor(dst, cv2.COLOR_BGR2GRAY)
-    watch(dst, 'Result')
+    watch(dst, 'Result', True)
 
 
 def angle_valid(angle):
