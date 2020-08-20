@@ -1,5 +1,5 @@
 """
-参考： http://fengjian0106.github.io/2017/05/08/Document-Scanning-With-TensorFlow-And-OpenCV/
+Ref： http://fengjian0106.github.io/2017/05/08/Document-Scanning-With-TensorFlow-And-OpenCV/
 """
 
 from itertools import combinations
@@ -10,10 +10,11 @@ from helper import *
 
 DEBUG = False
 
-MAX_LENGTH = 1200  # 图片的长边 resize 到 MAX_LENGTH
+MAX_LENGTH = 1200  # resize long side to MAX_LENGTH
 
-CANNY_THRESH_MIN = 10  # 小于这个阈值的像素不会被认为是边缘
-CANNY_THRESH_MAX = 50  # 大于这个阈值的像素才会被认为是边缘
+# Pixels smaller than this threshold will not be considered as edges
+CANNY_THRESH_MIN = 10
+CANNY_THRESH_MAX = 50  # Pixels larger than this threshold will be considered edges
 
 CONTOURS_LENGTH_THRESH = 200
 CONTOURS_AREA_THRESH = 50
@@ -21,23 +22,26 @@ CONTOURS_AREA_THRESH = 50
 HOUGH_THRESH = 150
 HOUGH_MIN_LINE_LENGTH = 20
 HOUGH_MAX_LINE_GAP = 50
-LINE_LENGTH_THRESH = 150  # 过滤霍夫直线检测的结果
+LINE_LENGTH_THRESH = 150  # Filter the results of Hough line detection
 
-# 合并靠的比较近的直线
+# Merging closer lines
 MERGE_LINE_MAX_DISTANCE = 50
 
-# 两个交点如果靠的很近则合并成一个
+# If two intersections are very close, they merge into one
 MERGE_CLOSE_CROSS_POINT_MIN_DISTANCE = 20
 
-# 四边形两条对边中，较小值/较大值 的比例不能小于该值
+# Among the two opposite sides of the quadrilateral, the ratio of
+# the smaller value/the larger value cannot be less than this value
 DOC_SIDE_MIN_RATIO = 0.8
-# 四边形的相邻边的比例最大不能超过该值
+# The ratio of adjacent sides of the quadrilateral cannot exceed
+# this value at most
 DOC_SIDE_MAX_RATIO = 3
 
-# 四边形对角的角度差值最大不能超过该值
+# The angle difference between the diagonal corners of the
+# quadrilateral cannot exceed this value at most
 DOC_ANGLE_MAX_DIFF = 30
 
-# 四边形角度约束
+# Quadrilateral angle constraint
 INTERSECTION_ANGLE_MIN = 60
 INTERSECTION_ANGLE_MAX = 110
 
@@ -46,7 +50,8 @@ def main(args):
     image = cv2.imread(args.img)
     print("Origin size: %s" % str(image.shape))
 
-    # 把图片缩放到一定的尺度，否则调的参数很难起作用
+    # Scale the picture to a certain scale, otherwise the
+    # adjusted parameters will be difficult to work
     scale = 1200 / max(image.shape)
     image = cv2.resize(image, None, None, fx=scale, fy=scale)
     height = image.shape[0]
@@ -68,7 +73,8 @@ def main(args):
     edged = cv2.Canny(blurred, CANNY_THRESH_MIN, CANNY_THRESH_MAX)
     watch(edged, 'Canny edged')
 
-    _, contours, aa = cv2.findContours(edged, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    contours = cv2.findContours(
+        edged, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)[0]
     print("Contours num: %d" % len(contours))
 
     filtered_contours = []
@@ -76,7 +82,7 @@ def main(args):
     for c in contours:
         arcLen = cv2.arcLength(c, True)
         area = cv2.contourArea(c)
-        # 文档的边缘计算出来的 area 可能会很小
+        # calculated document area may be small
         if arcLen < CONTOURS_LENGTH_THRESH and area < CONTOURS_AREA_THRESH:
             continue
 
@@ -86,8 +92,9 @@ def main(args):
     print("Filtered contours num: %d" % len(filtered_contours))
     watch(contours_img, 'Contours image')
 
-    # 对轮廓图进行霍夫变换检测直线
-    lines = cv2.HoughLinesP(contours_img, 1, np.pi / 180, HOUGH_THRESH, HOUGH_MIN_LINE_LENGTH, HOUGH_MAX_LINE_GAP)
+    # Hough transform to detect straight lines on contour map
+    lines = cv2.HoughLinesP(contours_img, 1, np.pi / 180,
+                            HOUGH_THRESH, HOUGH_MIN_LINE_LENGTH, HOUGH_MAX_LINE_GAP)
     filterd_lines = []
     if lines is not None:
         print("Hough Lines num: %d" % len(lines))
@@ -95,7 +102,7 @@ def main(args):
         lines_img = image.copy()
         for line in lines:
             x1, y1, x2, y2 = line[0]
-            # 过滤掉长度过短的直线
+            # Filter out lines that are too short
             if np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2) < LINE_LENGTH_THRESH:
                 continue
             filterd_lines.append(line[0])
@@ -104,19 +111,21 @@ def main(args):
         print("Filtered Hough Lines num: %d" % len(filterd_lines))
         watch(lines_img, "Hough Lines")
 
-    # 获得直线段的延长线
+    # Obtain the extension of the straight line
     extended_lines = []
     extended_lines_img = image.copy()
     for line in filterd_lines:
-        extend_x1, extend_y1, extend_x2, extend_y2 = get_extend_line(line, height, width)
-        cv2.line(extended_lines_img, (extend_x1, extend_y1), (extend_x2, extend_y2), (0, 255, 0), 1)
+        extend_x1, extend_y1, extend_x2, extend_y2 = get_extend_line(
+            line, height, width)
+        cv2.line(extended_lines_img, (extend_x1, extend_y1),
+                 (extend_x2, extend_y2), (0, 255, 0), 1)
 
         p0 = np.array([extend_x1, extend_y1])
         p1 = np.array([extend_x2, extend_y2])
         extended_lines.append(Line(p0, p1))
     watch(extended_lines_img, "Extended Lines")
 
-    # 合并斜率相近，并且靠的很近的直线
+    # Merge straight lines with similar slopes and close to each other
     merged_extended_lines = []
     merged_lines = {}
     merged_lines_img = image.copy()
@@ -142,7 +151,7 @@ def main(args):
     print("Lines num after merge: %d" % len(merged_extended_lines))
     watch(merged_lines_img, "Merged Lines")
 
-    # 获得线段的延长线交点
+    # Obtain the intersection of the extension line of the line segment
     cross_pnts = []
     cross_pnts_lines = []
     for i in range(len(merged_extended_lines)):
@@ -153,12 +162,13 @@ def main(args):
             if point is not None and point_valid(point, height, width):
                 cross_pnts.append(point)
                 cross_pnts_lines.append((line, _line))
-                cv2.circle(merged_lines_img, (int(point[0]), int(point[1])), 5, color=(0, 0, 255), thickness=2)
+                cv2.circle(merged_lines_img, (int(point[0]), int(
+                    point[1])), 5, color=(0, 0, 255), thickness=2)
 
     print("Cross points num: %d" % len(cross_pnts))
     watch(merged_lines_img, "Extended Lines cross point")
 
-    # 合并临近的交点
+    # Merge adjacent intersections
     merged_cross_pnts = []
     merged_cross_pnts_lines = []
     merged_pnts = {}
@@ -176,14 +186,16 @@ def main(args):
                 merged_pnts[j] = j
                 cross_pnts[i] = (pnt + _pnt) / 2
 
-        cv2.circle(merged_lines_img, (int(pnt[0]), int(pnt[1])), 5, color=(0, 255, 255), thickness=2)
+        cv2.circle(merged_lines_img, (int(pnt[0]), int(
+            pnt[1])), 5, color=(0, 255, 255), thickness=2)
         merged_cross_pnts.append(cross_pnts[i])
         merged_cross_pnts_lines.append(cross_pnts_lines[i])
 
     print("Merged cross points num: %d" % len(merged_cross_pnts))
     watch(merged_lines_img, "Merged cross points")
 
-    # 每次取四个点，以顺时针排列，过滤掉不合理的四边形
+    # Take four points at a time and arrange them clockwise to filter
+    # out unreasonable quadrilaterals
     rect_pnts = []
     valid_pnts_img = image.copy()
     for data in combinations(zip(merged_cross_pnts, merged_cross_pnts_lines), 4):
@@ -195,7 +207,7 @@ def main(args):
             lines.append(d[1][1])
 
         pnts = clockwise_points(np.asarray(list(pnts)))
-        # TODO: 判断是否为凸多边形？
+        # TODO: Determine whether it is a convex polygon?
         top_line = Line(pnts[0], pnts[1])
         right_line = Line(pnts[1], pnts[2])
         bottom_line = Line(pnts[2], pnts[3])
@@ -205,7 +217,8 @@ def main(args):
         # tmp = draw_four_vectors(tmp, pnts)
         # watch(tmp, "trbl rects")
 
-        # 判断四条边是否与形成较角点的直线靠近，只要有一条边不满足则 continue
+        # Judge whether the four sides are close to the straight line forming the
+        # corner point, as long as one side is not satisfied, continue
         if not line_valid(top_line, lines, height, width):
             continue
         if not line_valid(right_line, lines, height, width):
@@ -216,7 +229,7 @@ def main(args):
             continue
         print("===Pass line_valid===")
 
-        # 对边长度差约束
+        # Opposite length difference constraint
         if min(top_line.length, bottom_line.length) / max(top_line.length, bottom_line.length) < DOC_SIDE_MIN_RATIO:
             continue
 
@@ -224,7 +237,7 @@ def main(args):
             continue
         print("===Pass doc min_side/max_side ratio===")
 
-        # 相邻边比例约束
+        # Adjacent edge ratio constraint
         if max(top_line.length, right_line.length) / min(top_line.length, right_line.length) > DOC_SIDE_MAX_RATIO:
             continue
         if max(top_line.length, left_line.length) / min(top_line.length, left_line.length) > DOC_SIDE_MAX_RATIO:
@@ -235,7 +248,7 @@ def main(args):
             continue
         print("===Pass doc max/min ratio===")
 
-        # 角度约束
+        # Angle constraint
         top_left_angle = cos_angle(pnts[1] - pnts[0], pnts[3] - pnts[0])
         top_right_angle = cos_angle(pnts[0] - pnts[1], pnts[2] - pnts[1])
         bottom_right_angle = cos_angle(pnts[1] - pnts[2], pnts[3] - pnts[2])
@@ -263,7 +276,7 @@ def main(args):
         print("Bottom line angle %f" % bottom_line.angle)
         print("Left line angle %f" % left_line.angle)
 
-        # 约束两组对角的差
+        # Constrain the difference between the two diagonals
         angle_diff1 = abs(top_left_angle - bottom_right_angle)
         angle_diff2 = abs(top_right_angle - bottom_left_angle)
 
@@ -287,19 +300,24 @@ def main(args):
         print("Not found valid document")
         return
 
-    # TODO： 进一步添加约束策略，如面积、是否居于图片中心，整体旋转的角度等
+    # TODO： Further add constraint strategies, such as area,
+    # whether it is in the center of the picture, the overall
+    # rotation angle, etc.
 
     rect = rect_pnts[0]
     min_rect = cv2.minAreaRect(rect)
     min_rect = cv2.boxPoints(min_rect)
     min_rect = clockwise_points(min_rect)
 
-    scale = abs(min_rect[1][1] - min_rect[2][1]) / abs(min_rect[0][0] - min_rect[1][0])
+    scale = abs(min_rect[1][1] - min_rect[2][1]) / \
+        abs(min_rect[0][0] - min_rect[1][0])
     result_w = 800
     result_h = int(result_w * scale)
 
-    # 做投影变换，摆正视图，目标视图的比例应该和文档的比例相关
-    pts2 = np.float32([[0, 0], [result_w, 0], [result_w, result_h], [0, result_h]])
+    # Perform projection transformation, straighten the view, the scale
+    # of the target view should be related to the scale of the document
+    pts2 = np.float32(
+        [[0, 0], [result_w, 0], [result_w, result_h], [0, result_h]])
 
     M = cv2.getPerspectiveTransform(rect, pts2)
     dst = cv2.warpPerspective(image, M, (result_w, result_h))
@@ -312,7 +330,7 @@ def angle_valid(angle):
 
 def point_valid(pnt, height, width):
     """
-    点坐标是否处于图片内部
+    Whether the point coordinates are inside the picture
     """
     if pnt[0] > width or pnt[0] < 0:
         return False
@@ -323,8 +341,10 @@ def point_valid(pnt, height, width):
 
 def line_valid(line, lines, height, width):
     """
-    如果 line 与 lines 中任意一条直线重合，则返回 True，否则返回 False
-    该函数会先延长 line, 传入的 lines 应该认为是已经 extend 过了
+    If line coincides with any one of lines, return True,
+    otherwise return False
+    This function will extend the line first, and the
+    incoming lines should be considered to have been extended
     """
     line = [line.p0[0], line.p0[1], line.p1[0], line.p1[1]]
     extend_line = get_extend_line(line, height, width)
@@ -339,22 +359,22 @@ def line_valid(line, lines, height, width):
 
 def get_extend_line(line, height, width):
     """
-    将 line 线段延长到图片的边缘
-    :param line: 待延长的直线段 [x1, y1, x2, y2]
-    :param height: 图片的高度
-    :param width: 图片的宽度
+    Extend the line segment to the edge of the picture
+    :param line: Straight segment to be extended [x1, y1, x2, y2]
+    :param height: Image height
+    :param width: Image width
     :return:
         (x1, y1, x2, y2)
     """
     x1, y1, x2, y2 = line
 
     if x1 == x2:
-        # 竖直的线
+        # Vertical line
         extend_x1 = extend_x2 = x1
         extend_y1 = 0
         extend_y2 = height
     elif y2 == y1:
-        # 水平的线
+        # Horizontal line
         extend_x1 = 0
         extend_y1 = extend_y2 = y1
         extend_x2 = width
@@ -379,7 +399,8 @@ def get_extend_line(line, height, width):
             extend_x2 = 0
             extend_y2 = y2 - k * x2
 
-        extend_x1, extend_y1, extend_x2, extend_y2 = int(extend_x1), int(extend_y1), int(extend_x2), int(extend_y2)
+        extend_x1, extend_y1, extend_x2, extend_y2 = int(
+            extend_x1), int(extend_y1), int(extend_x2), int(extend_y2)
 
     return extend_x1, extend_y1, extend_x2, extend_y2
 

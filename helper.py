@@ -1,8 +1,7 @@
 import math
-
 import cv2
 import numpy as np
-from scipy.spatial import distance as dist
+# from scipy.spatial import distance as dist
 
 # https://www.pyimagesearch.com/2016/03/21/ordering-coordinates-clockwise-with-python-and-opencv/
 from scanner import DEBUG
@@ -33,12 +32,13 @@ def clockwise_points(pnts):
     # top-left and right-most points; by the Pythagorean
     # theorem, the point with the largest distance will be
     # our bottom-right point
-    # 使用下面这两句，在四边形是梯形时会输出错误的结果
+    # Using the following two sentences, wrong result will
+    # be output when the quadrilateral is trapezoidal
     # D = dist.cdist(tl[np.newaxis], rightMost, "euclidean")[0]
     # (br, tr) = rightMost[np.argsort(D)[::-1], :]
 
-    # 根据 rightMost 的 y 坐标进行排序
-    # 如果后面有问题，可以参考 https://github.com/jrosebr1/imutils/pull/13 进行修改
+    # Sort rightMost according to the y coordinate
+    # https://github.com/jrosebr1/imutils/pull/13
     rightMost = rightMost[np.argsort(rightMost[:, 1]), :]
     (tr, br) = rightMost
 
@@ -85,7 +85,8 @@ class Line:
         self.p1 = new_p1 / 2
 
     def close_to(self, line, max_dis) -> bool:
-        # 这种判断方法是错误的，因为两条直线的左右点可能对应不起来
+        # This method of judgment is wrong, because the left and right points
+        # of the two straight lines may not correspond to each other
         # left_dis = distance(self.left_point, line.left_point)
         # if left_dis > max_dis:
         #     return False
@@ -94,7 +95,7 @@ class Line:
         # if right_dis > max_dis:
         #     return False
 
-        # TODO: 优化逻辑，减少计算
+        # TODO: Optimize logic and reduce calculation
         left_close = False
         left_dis = distance(self.left_point, line.left_point)
         if left_dis < max_dis:
@@ -124,7 +125,7 @@ class Line:
 
     @property
     def angle(self):
-        # 返回与 x 轴的夹角
+        # Returns angle  x  axis
         # http://opencv-users.1802565.n2.nabble.com/Angle-between-2-lines-td6803229.html
         # https://stackoverflow.com/questions/2339487/calculate-angle-of-2-points
         angle = math.atan2(self.right_point[1] - self.left_point[1],
@@ -175,12 +176,17 @@ def distance(p0, p1):
 def draw_four_vectors(img, line, color=(0, 255, 0), draw_text=True):
     """
     :param line: [[x1,y1],[x2,y2],[x3,y3],[x4,y4]]
-        矩形四点坐标的顺序： left-top, right-top, right-bottom, left-bottom
+    The order of the four-point coordinates of the rectangle:
+        left-top, right-top, right-bottom, left-bottom
     """
-    img = cv2.line(img, (line[0][0], line[0][1]), (line[1][0], line[1][1]), color)
-    img = cv2.line(img, (line[1][0], line[1][1]), (line[2][0], line[2][1]), color)
-    img = cv2.line(img, (line[2][0], line[2][1]), (line[3][0], line[3][1]), color)
-    img = cv2.line(img, (line[3][0], line[3][1]), (line[0][0], line[0][1]), color)
+    img = cv2.line(img, (line[0][0], line[0][1]),
+                   (line[1][0], line[1][1]), color)
+    img = cv2.line(img, (line[1][0], line[1][1]),
+                   (line[2][0], line[2][1]), color)
+    img = cv2.line(img, (line[2][0], line[2][1]),
+                   (line[3][0], line[3][1]), color)
+    img = cv2.line(img, (line[3][0], line[3][1]),
+                   (line[0][0], line[0][1]), color)
 
     if draw_text:
         # draw corner name
