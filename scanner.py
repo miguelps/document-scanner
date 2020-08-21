@@ -1,6 +1,7 @@
 import sys
 import cv2
 import numpy as np
+import imutils
 
 
 def rectify(h):
@@ -25,8 +26,9 @@ def process(image):
 
     # resize image so it can be processed
     # choose optimal dimensions such that important content is not lost
-    print(image.shape)
-    image = cv2.resize(image, (1500, 880))
+    # print(image.shape)
+    image = imutils.resize(image, 600)
+    # print(image.shape)
 
     # creating copy of original image
     orig = image.copy()
@@ -37,8 +39,7 @@ def process(image):
     # blurred = cv2.medianBlur(gray, 5)
 
     # apply Canny Edge Detection
-    edged = cv2.Canny(blurred, 0, 50)
-    orig_edged = edged.copy()
+    edged = cv2.Canny(blurred, 0, 40)
 
     # find the contours in the edged image, keeping only the
     # largest ones, and initialize the screen contour
@@ -68,17 +69,17 @@ def process(image):
     dst = cv2.cvtColor(dst, cv2.COLOR_BGR2GRAY)
 
     # using thresholding on warped image to get scanned effect (If Required)
-    ret, th1 = cv2.threshold(dst, 127, 255, cv2.THRESH_BINARY)
+    th1 = cv2.threshold(dst, 127, 255, cv2.THRESH_BINARY)[1]
     th2 = cv2.adaptiveThreshold(dst, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
                                 cv2.THRESH_BINARY, 11, 2)
     th3 = cv2.adaptiveThreshold(dst, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                                 cv2.THRESH_BINARY, 11, 2)
-    ret2, th4 = cv2.threshold(dst, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+    th4 = cv2.threshold(dst, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)[1]
 
     cv2.imshow("Original.jpg", orig)
-    cv2.imshow("Original Gray.jpg", gray)
-    cv2.imshow("Original Blurred.jpg", blurred)
-    cv2.imshow("Original Edged.jpg", orig_edged)
+    cv2.imshow("Gray.jpg", gray)
+    cv2.imshow("Blurred.jpg", blurred)
+    cv2.imshow("Edged.jpg", edged)
     cv2.imshow("Outline.jpg", image)
     cv2.imshow("Thresh Binary.jpg", th1)
     cv2.imshow("Thresh mean.jpg", th2)
@@ -88,11 +89,11 @@ def process(image):
 
     # other thresholding methods
     """
-    ret,thresh1 = cv2.threshold(dst,127,255,cv2.THRESH_BINARY)
-    ret,thresh2 = cv2.threshold(dst,127,255,cv2.THRESH_BINARY_INV)
-    ret,thresh3 = cv2.threshold(dst,127,255,cv2.THRESH_TRUNC)
-    ret,thresh4 = cv2.threshold(dst,127,255,cv2.THRESH_TOZERO)
-    ret,thresh5 = cv2.threshold(dst,127,255,cv2.THRESH_TOZERO_INV)
+    thresh1 = cv2.threshold(dst,127,255,cv2.THRESH_BINARY)[1]
+    thresh2 = cv2.threshold(dst,127,255,cv2.THRESH_BINARY_INV)[1]
+    thresh3 = cv2.threshold(dst,127,255,cv2.THRESH_TRUNC)[1]
+    thresh4 = cv2.threshold(dst,127,255,cv2.THRESH_TOZERO)[1]
+    thresh5 = cv2.threshold(dst,127,255,cv2.THRESH_TOZERO_INV)[1]
 
     cv2.imshow("Thresh Binary", thresh1)
     cv2.imshow("Thresh Binary_INV", thresh2)

@@ -1,6 +1,7 @@
 # document-scanner
 
 A document scanner built using OpenCV + Python.
+A very basic approach
 
 Original [blogspot](
     http://vipulsharma20.blogspot.com/2016/01/document-scanner-using-python-opencv.html)
